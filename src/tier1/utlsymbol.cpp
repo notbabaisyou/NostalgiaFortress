@@ -289,7 +289,7 @@ void CUtlSymbolTable::RemoveAll()
 
 
 
-class CUtlFilenameSymbolTable::HashTable : public CUtlStableHashtable<CUtlConstString>
+class CUtlFilenameSymbolTable::HashTable : public CUtlStableHashtable< CUtlConstString, empty_t, CaselessStringHashFunctor, CaselessStringEqualFunctor, uint32 >
 {
 };
 
