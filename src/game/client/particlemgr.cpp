@@ -56,7 +56,9 @@ static ConCommand cl_particle_stats_start( "cl_particle_stats_start", StatsParti
 static ConCommand cl_particle_stats_stop( "cl_particle_stats_stop", StatsParticlesStop, "Stop particle stats, or snapshot this frame - also dumps to particle_stats.csv") ;
 static ConVar cl_particle_stats_trigger_count( "cl_particle_stats_trigger_count", "0", 0, "Dump stats if the particle count exceeds this number." );
 
-
+#if defined(TF_CLIENT_DLL) || defined ( TF_MOD_CLIENT )
+ConVar cl_threaded_particles("cl_threaded_particles", IsX360() ? "1" : "0");
+#endif
 
 #define BUCKET_SORT_EVERY_N		8			// It does a bucket sort for each material approximately every N times.
 #define BBOX_UPDATE_EVERY_N		8			// It does a full bbox update (checks all particles instead of every eighth one).
@@ -1084,24 +1086,24 @@ bool CParticleMgr::Init(unsigned long count, IMaterialSystem *pMaterials)
 	ParseParticleEffects( true, false );
 
 #if defined( TF_CLIENT_DLL ) || defined ( TF_MOD_CLIENT )
-	if ( IsX360() )
+	if ( cl_threaded_particles.GetBool() && g_pThreadPool->NumThreads() )
 	{
-		//m_pThreadPool[0] = CreateThreadPool();
 		m_pThreadPool[1] = CreateThreadPool();
 
 		ThreadPoolStartParams_t startParams;
-		startParams.nThreads = 3;
 		startParams.nStackSize = 128*1024;
 		startParams.fDistribute = TRS_TRUE;
-		startParams.bUseAffinityTable = true;    
-		startParams.iAffinityTable[0] = XBOX_PROCESSOR_1;
-		startParams.iAffinityTable[1] = XBOX_PROCESSOR_3;
-		startParams.iAffinityTable[2] = XBOX_PROCESSOR_5;
-		//m_pThreadPool[0]->Start( startParams );
+		startParams.nThreads = IsX360() ? 3 : 2;
 
-		startParams.nThreads = 2;
-		startParams.iAffinityTable[1] = CommandLine()->FindParm( "-swapcores" ) ? XBOX_PROCESSOR_5 : XBOX_PROCESSOR_3;
-		m_pThreadPool[1]->Start( startParams );
+		if ( IsX360() )
+		{
+			startParams.bUseAffinityTable = true;    
+			startParams.iAffinityTable[0] = XBOX_PROCESSOR_1;
+			startParams.iAffinityTable[1] = CommandLine()->FindParm( "-swapcores" ) ? XBOX_PROCESSOR_5 : XBOX_PROCESSOR_3;
+			startParams.iAffinityTable[2] = XBOX_PROCESSOR_5;
+		}
+
+		m_pThreadPool[1]->Start( startParams, "ParticleMgr" );
 	}
 #endif
 
@@ -1757,8 +1759,6 @@ bool CParticleMgr::EarlyRetireParticleSystems( int nCount, ParticleSimListEntry_
 	return bRetiredCollections;
 }
 
-static ConVar particle_sim_alt_cores( "particle_sim_alt_cores", "2" );
-
 void CParticleMgr::BuildParticleSimList( CUtlVector< ParticleSimListEntry_t > &list )
 {
 	float flNow = g_pParticleSystemMgr->GetLastSimulationTime();
@@ -1874,17 +1874,13 @@ void CParticleMgr::UpdateNewEffects( float flTimeDelta )
 		}
 		else
 		{
-			int nAltCore = IsX360() && particle_sim_alt_cores.GetInt();
-			if ( !m_pThreadPool[1] || nAltCore == 0 )
+			int nAltCore = MIN(cl_threaded_particles.GetInt(), 2);
+			if ( !m_pThreadPool[1] )
 			{
 				ParallelProcess( "CParticleMgr::UpdateNewEffects", particlesToSimulate.Base(), nCount, ProcessPSystem );
 			}
 			else
 			{
-				if ( nAltCore > 2 )
-				{
-					nAltCore = 2;
-				}
 				CParallelProcessor<ParticleSimListEntry_t, CFuncJobItemProcessor<ParticleSimListEntry_t> > processor( "CParticleMgr::UpdateNewEffects" );
 				processor.m_ItemProcessor.Init( ProcessPSystem, NULL, NULL );
 				processor.Run( particlesToSimulate.Base(), nCount, INT_MAX, m_pThreadPool[nAltCore-1] );
