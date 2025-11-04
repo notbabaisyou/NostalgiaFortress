@@ -134,6 +134,7 @@ public:
 	virtual void	InfoPanelDisplayed() OVERRIDE { }
 	virtual bool	IsHTMLInfoPanelAllowed() OVERRIDE { return true; }
 
+	virtual void	RemoveFilesInPath( const char* pszPath ) const;
 protected:
 	CBaseViewport			*m_pViewport;
 
