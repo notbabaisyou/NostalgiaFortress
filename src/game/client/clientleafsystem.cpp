@@ -14,6 +14,7 @@
 #include "model_types.h"
 #include "ivrenderview.h"
 #include "tier0/vprof.h"
+#include "tier0/threadtools.h"
 #include "bsptreedata.h"
 #include "detailobjectsystem.h"
 #include "engine/IStaticPropMgr.h"
@@ -34,8 +35,27 @@ static ConVar r_PortalTestEnts( "r_PortalTestEnts", "1", FCVAR_CHEAT, "Clip enti
 static ConVar r_portalsopenall( "r_portalsopenall", "0", FCVAR_CHEAT, "Open all portals" );
 static ConVar cl_threaded_client_leaf_system("cl_threaded_client_leaf_system", "0"  );
 
-
 DEFINE_FIXEDSIZE_ALLOCATOR( CClientRenderablesList, 1, CUtlMemoryPool::GROW_SLOW );
+
+//-----------------------------------------------------------------------------
+// All the information associated with a particular handle
+//-----------------------------------------------------------------------------
+struct RenderableInfo_t
+{
+	IClientRenderable*	m_pRenderable;
+	int					m_RenderFrame;	// which frame did I render it in?
+	int					m_RenderFrame2;
+	int					m_EnumCount;	// Have I been added to a particular shadow yet?
+	int					m_TranslucencyCalculated;
+	unsigned int		m_LeafList;		// What leafs is it in?
+	unsigned int		m_RenderLeaf;	// What leaf do I render in?
+	unsigned char		m_Flags;		// rendering flags
+	unsigned char		m_RenderGroup;	// RenderGroup_t type
+	unsigned short		m_FirstShadow;	// The first shadow caster that cast on it
+	short m_Area;	// -1 if the renderable spans multiple areas.
+	signed char			m_TranslucencyCalculatedView;
+	int                 m_RequiresComputeFXBlendUpdate; // Used by client leaf system
+};
 
 //-----------------------------------------------------------------------------
 // Threading helpers
@@ -51,11 +71,20 @@ static void FrameUnlock()
 	mdlcache->EndLock();
 }
 
-static void CallComputeFXBlend( IClientRenderable *&pRenderable )
+//-----------------------------------------------------------------------------
+// Threaded offloading of ComputeTranslucentRenderLeaf()
+//-----------------------------------------------------------------------------
+static void CallComputeFXBlend( RenderableInfo_t *&pRenderable )
 {
-	if (pRenderable)
+#define IsLeafMarker( p ) (bool)((reinterpret_cast<size_t>(p)) & 1)
+	if (IsLeafMarker(pRenderable))
 	{
-		pRenderable->ComputeFxBlend();
+		return;
+	}
+
+	if (ThreadInterlockedExchange(&pRenderable->m_RequiresComputeFXBlendUpdate, 0))
+	{
+		pRenderable->m_pRenderable->ComputeFxBlend();
 	}
 }
 
@@ -233,6 +262,7 @@ private:
 	}
 
 private:
+
 	enum
 	{
 		RENDER_FLAGS_TWOPASS		= 0x01,
@@ -241,23 +271,6 @@ private:
 		RENDER_FLAGS_STUDIO_MODEL	= 0x08,
 		RENDER_FLAGS_HASCHANGED		= 0x10,
 		RENDER_FLAGS_ALTERNATE_SORTING = 0x20,
-	};
-
-	// All the information associated with a particular handle
-	struct RenderableInfo_t
-	{
-		IClientRenderable*	m_pRenderable;
-		int					m_RenderFrame;	// which frame did I render it in?
-		int					m_RenderFrame2;
-		int					m_EnumCount;	// Have I been added to a particular shadow yet?
-		int					m_TranslucencyCalculated;
-		unsigned int		m_LeafList;		// What leafs is it in?
-		unsigned int		m_RenderLeaf;	// What leaf do I render in?
-		unsigned char		m_Flags;		// rendering flags
-		unsigned char		m_RenderGroup;	// RenderGroup_t type
-		unsigned short		m_FirstShadow;	// The first shadow caster that cast on it
-		short m_Area;	// -1 if the renderable spans multiple areas.
-		signed char			m_TranslucencyCalculatedView;
 	};
 
 	// The leaf contains an index into a list of renderables
@@ -632,6 +645,7 @@ void CClientLeafSystem::NewRenderable( IClientRenderable* pRenderable, RenderGro
 	info.m_RenderGroup = (unsigned char)type;
 	info.m_EnumCount = 0;
 	info.m_RenderLeaf = m_RenderablesInLeaf.InvalidIndex();
+	info.m_RequiresComputeFXBlendUpdate = false;
 	if ( IsViewModelRenderGroup( (RenderGroup_t)info.m_RenderGroup ) )
 	{
 		AddToViewModelList( handle );
@@ -1384,8 +1398,7 @@ void CClientLeafSystem::ComputeTranslucentRenderLeaf( int count, const LeafIndex
 	int globalFrameCount = gpGlobals->framecount;
 	int i;
 
-	static CUtlVector<RenderableInfo_t *> orderedList; // @MULTICORE (toml 8/30/2006): will need to make non-static if thread this function
-	static CUtlVector<IClientRenderable *> renderablesToUpdate;
+	CUtlVector<RenderableInfo_t *> orderedList;
 	int leaf = 0;
 	for ( i = 0; i < count; ++i )
 	{
@@ -1399,18 +1412,20 @@ void CClientLeafSystem::ComputeTranslucentRenderLeaf( int count, const LeafIndex
 			RenderableInfo_t& info = m_Renderables[m_RenderablesInLeaf.Element(idx)];
 			if ( info.m_TranslucencyCalculated != globalFrameCount || info.m_TranslucencyCalculatedView != viewID )
 			{ 
-				// Compute translucency
-				if ( bThreaded )
-				{
-					renderablesToUpdate.AddToTail( info.m_pRenderable );
-				}
-				else
+				// If we're not threaded then Compute translucency, otherwise flag it down to do so.
+				if ( !bThreaded )
 				{
 					info.m_pRenderable->ComputeFxBlend();
 				}
+				else
+				{
+					info.m_RequiresComputeFXBlendUpdate = true;
+				}
+
 				info.m_TranslucencyCalculated = globalFrameCount;
 				info.m_TranslucencyCalculatedView = viewID;
 			}
+
 			orderedList.AddToTail( &info );
 			idx = m_RenderablesInLeaf.NextElement(idx); 
 		}
@@ -1418,8 +1433,7 @@ void CClientLeafSystem::ComputeTranslucentRenderLeaf( int count, const LeafIndex
 
 	if ( bThreaded )
 	{
-		ParallelProcess( "CClientLeafSystem::ComputeTranslucentRenderLeaf", renderablesToUpdate.Base(), renderablesToUpdate.Count(), &CallComputeFXBlend, &::FrameLock, &::FrameUnlock );
-		renderablesToUpdate.RemoveAll();
+		ParallelProcess( "CClientLeafSystem::ComputeTranslucentRenderLeaf", orderedList.Base(), orderedList.Count(), &CallComputeFXBlend, &::FrameLock, &::FrameUnlock );
 	}
 
 	for ( i = 0; i != orderedList.Count(); i++ )
