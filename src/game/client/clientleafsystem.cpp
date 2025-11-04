@@ -53,7 +53,10 @@ static void FrameUnlock()
 
 static void CallComputeFXBlend( IClientRenderable *&pRenderable )
 {
-	pRenderable->ComputeFxBlend();
+	if (pRenderable)
+	{
+		pRenderable->ComputeFxBlend();
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -550,9 +553,7 @@ void CClientLeafSystem::PreRender()
 			RemoveFromTree( handle );
 		}
 
-		bool bThreaded = false;//( nDirty > 5 && cl_threaded_client_leaf_system.GetBool() && g_pThreadPool->NumThreads() );
-
-		if ( !bThreaded )
+		if ( !cl_threaded_client_leaf_system.GetBool() )
 		{
 			for ( i = nDirty; --i >= 0; )
 			{
@@ -1379,7 +1380,7 @@ void CClientLeafSystem::ComputeTranslucentRenderLeaf( int count, const LeafIndex
 
 	// For better sorting, we're gonna choose the leaf that is closest to the camera.
 	// The leaf list passed in here is sorted front to back
-	bool bThreaded = false;//( cl_threaded_client_leaf_system.GetBool() && g_pThreadPool->NumThreads() );
+	bool bThreaded = ( cl_threaded_client_leaf_system.GetBool() && g_pThreadPool->NumThreads() );
 	int globalFrameCount = gpGlobals->framecount;
 	int i;
 
