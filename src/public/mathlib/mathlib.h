@@ -467,32 +467,15 @@ void inline SinCos( float radians, float *sine, float *cosine )
 
 #define SIN_TABLE_SIZE	256
 #define FTOIBIAS		12582912.f
-extern float SinCosTable[SIN_TABLE_SIZE];
 
 inline float TableCos( float theta )
 {
-	union
-	{
-		int i;
-		float f;
-	} ftmp;
-
-	// ideally, the following should compile down to: theta * constant + constant, changing any of these constants from defines sometimes fubars this.
-	ftmp.f = theta * ( float )( SIN_TABLE_SIZE / ( 2.0f * M_PI ) ) + ( FTOIBIAS + ( SIN_TABLE_SIZE / 4 ) );
-	return SinCosTable[ ftmp.i & ( SIN_TABLE_SIZE - 1 ) ];
+	return FastCos( theta );
 }
 
 inline float TableSin( float theta )
 {
-	union
-	{
-		int i;
-		float f;
-	} ftmp;
-
-	// ideally, the following should compile down to: theta * constant + constant
-	ftmp.f = theta * ( float )( SIN_TABLE_SIZE / ( 2.0f * M_PI ) ) + FTOIBIAS;
-	return SinCosTable[ ftmp.i & ( SIN_TABLE_SIZE - 1 ) ];
+	return sinf( theta );
 }
 
 template<class T>
@@ -2168,7 +2151,7 @@ inline bool CloseEnough( const Vector &a, const Vector &b, float epsilon = EQUAL
 // Fast compare
 // maxUlps is the maximum error in terms of Units in the Last Place. This 
 // specifies how big an error we are willing to accept in terms of the value
-// of the least significant digit of the floating point number’s 
+// of the least significant digit of the floating point numberï¿½s 
 // representation. maxUlps can also be interpreted in terms of how many 
 // representable floats we are willing to accept between A and B. 
 // This function will allow maxUlps-1 floats between A and B.
