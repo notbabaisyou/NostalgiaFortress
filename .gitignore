@@ -25,6 +25,9 @@ ipch
 *.FileListAbsolute.txt
 .vs/
 
+# VSCode
+.vscode/
+
 # CodeLite
 *.project
 
