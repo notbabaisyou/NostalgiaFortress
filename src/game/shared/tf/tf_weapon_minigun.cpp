@@ -1,4 +1,4 @@
-//====== Copyright © 1996-2003, Valve Corporation, All rights reserved. =======
+//====== Copyright ï¿½ 1996-2003, Valve Corporation, All rights reserved. =======
 //
 // Purpose: 
 //
@@ -14,6 +14,7 @@
 #ifdef CLIENT_DLL
 #include "c_tf_player.h"
 #include "soundenvelope.h"
+#include "prediction.h"
 
 // Server specific.
 #else
@@ -540,6 +541,11 @@ void CTFMinigun::StandardBlendingRules( CStudioHdr *hdr, Vector pos[], Quaternio
 //-----------------------------------------------------------------------------
 void CTFMinigun::UpdateBarrelMovement()
 {
+	if ( prediction->InPrediction() && !prediction->IsFirstTimePredicted() )
+	{
+		return;
+	}
+
 	if ( m_flBarrelCurrentVelocity != m_flBarrelTargetVelocity )
 	{
 		// update barrel velocity to bring it up to speed or to rest
