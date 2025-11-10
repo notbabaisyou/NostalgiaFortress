@@ -222,8 +222,7 @@ bool CWeaponMedigun::Holster( CBaseCombatWeapon *pSwitchingTo )
 	RemoveHealingTarget( true );
 	m_bAttacking = false;
 	m_bHolstered = true;
-
-
+	m_bHealing = false;
 
 #ifdef GAME_DLL
 	CTFPlayer *pOwner = ToTFPlayer( GetOwnerEntity() );
