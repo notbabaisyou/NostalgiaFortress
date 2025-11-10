@@ -57,7 +57,7 @@ static ConCommand cl_particle_stats_stop( "cl_particle_stats_stop", StatsParticl
 static ConVar cl_particle_stats_trigger_count( "cl_particle_stats_trigger_count", "0", 0, "Dump stats if the particle count exceeds this number." );
 
 #if defined(TF_CLIENT_DLL) || defined ( TF_MOD_CLIENT )
-ConVar cl_threaded_particles("cl_threaded_particles", IsX360() ? "1" : "0");
+ConVar cl_threaded_particles("cl_threaded_particles", "1");
 #endif
 
 #define BUCKET_SORT_EVERY_N		8			// It does a bucket sort for each material approximately every N times.
