@@ -3359,6 +3359,7 @@ void MathLib_Init( float gamma, float texGamma, float brightness, int overbright
 
 		// Available unconditionally.
 		pfFastCos = _SSE_cos;
+		pfFastSinCos = _SSE_SinCos;
 
 #ifndef PLATFORM_WINDOWS_PC64
 		// These are not yet available.
@@ -3370,9 +3371,6 @@ void MathLib_Init( float gamma, float texGamma, float brightness, int overbright
 		pfRSqrt = _SSE_RSqrtAccurate;
 		pfRSqrtFast = _SSE_RSqrtFast;
 #endif
-#ifdef PLATFORM_WINDOWS_PC32
-		pfFastSinCos = _SSE_SinCos;
-#endif
 	}
 	else
 	{
@@ -3382,9 +3380,6 @@ void MathLib_Init( float gamma, float texGamma, float brightness, int overbright
 	if ( bAllowSSE2 && pi.m_bSSE2 )
 	{
 		s_bSSE2Enabled = true;
-#ifdef PLATFORM_WINDOWS_PC32
-		pfFastSinCos = _SSE2_SinCos;
-#endif
 	} 
 	else
 	{
