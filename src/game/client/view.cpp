@@ -121,10 +121,6 @@ ConVar cl_leveloverview( "cl_leveloverview", "0", FCVAR_CHEAT );
 static ConVar r_mapextents( "r_mapextents", "16384", FCVAR_CHEAT, 
 						   "Set the max dimension for the map.  This determines the far clipping plane" );
 
-// UNDONE: Delete this or move to the material system?
-ConVar	gl_clear( "gl_clear", "0");
-ConVar	gl_clear_randomcolor( "gl_clear_randomcolor", "0", FCVAR_CHEAT, "Clear the back buffer to random colors every frame. Helps spot open seams in geometry." );
-
 static ConVar r_farz( "r_farz", "-1", FCVAR_CHEAT, "Override the far clipping plane. -1 means to use the value in env_fog_controller." );
 static ConVar cl_demoviewoverride( "cl_demoviewoverride", "0", 0, "Override view during demo playback" );
 
@@ -1192,18 +1188,7 @@ void CViewRender::Render( vrect_t *rect )
 
 	    int nClearFlags = VIEW_CLEAR_DEPTH | VIEW_CLEAR_STENCIL;
 
-	    if( gl_clear_randomcolor.GetBool() )
-	    {
-		    CMatRenderContextPtr pRenderContext( materials );
-		    pRenderContext->ClearColor3ub( rand()%256, rand()%256, rand()%256 );
-		    pRenderContext->ClearBuffers( true, false, false );
-		    pRenderContext->Release();
-	    }
-	    else if ( gl_clear.GetBool() )
-	    {
-		    nClearFlags |= VIEW_CLEAR_COLOR;
-	    }
-	    else if ( IsPosix() )
+		if ( IsPosix() )
 	    {
 		    MaterialAdapterInfo_t adapterInfo;
 		    materials->GetDisplayAdapterInfo( materials->GetCurrentAdapter(), adapterInfo );
