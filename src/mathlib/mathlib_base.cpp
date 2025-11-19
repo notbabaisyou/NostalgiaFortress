@@ -468,12 +468,24 @@ void CrossProduct (const float* v1, const float* v2, float* cross)
 	cross[2] = v1[0]*v2[1] - v1[1]*v2[0];
 }
 
+#if defined(_WIN32) && (_MSC_VER >= 1310)
+#pragma intrinsic(_BitScanReverse)
+inline static int __BitScanReverse(unsigned long val)
+	{ unsigned long idx; _BitScanReverse(&idx, val); return((int)(31-idx)); }
+#endif
+
 int Q_log2(int val)
 {
+#if defined(_WIN32) && (_MSC_VER >= 1310)
+	return ((val <= 1) ? 0 : 32 - __BitScanReverse(val - 1));
+#elif POSIX
+	return ((val <= 1) ? 0 : 32 - __builtin_ctz(val - 1));
+#else
 	int answer=0;
 	while (val>>=1)
 		answer++;
 	return answer;
+#endif
 }
 
 // Matrix is right-handed x=forward, y=left, z=up.  We a left-handed convention for vectors in the game code (forward, right, up)
