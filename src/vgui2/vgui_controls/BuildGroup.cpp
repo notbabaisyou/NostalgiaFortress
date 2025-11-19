@@ -5,7 +5,7 @@
 // $NoKeywords: $
 //
 //=============================================================================//
- //========= Copyright © 1996-2003, Valve LLC, All rights reserved. ============
+ //========= Copyright ï¿½ 1996-2003, Valve LLC, All rights reserved. ============
 //
 // The copyright to the contents herein is the property of Valve, L.L.C.
 // The contents may be used and/or copied only with the written permission of
@@ -917,7 +917,8 @@ void BuildGroup::LoadControlSettings(const char *controlResourceName, const char
 	m_pResourceName = new char[strlen(controlResourceName) + 1];
 	strcpy(m_pResourceName, controlResourceName);
 
-	if (pathID)
+	// set path id only if it is not the same to prevent use-after-free
+	if (pathID && pathID != m_pResourcePathID)
 	{
 		delete [] m_pResourcePathID;
 		m_pResourcePathID = new char[strlen(pathID) + 1];
