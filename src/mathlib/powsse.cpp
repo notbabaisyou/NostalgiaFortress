@@ -41,54 +41,28 @@ fltx4 Pow_FixedPoint_Exponent_SIMD( const fltx4 & x, int exponent)
 		return rslt;
 }
 
-
-
-
-/*
- * (c) Ian Stephenson
- *
- * ian@dctsystems.co.uk
- *
- * Fast pow() reference implementation
- */
-
-
-static float shift23=(1<<23);
-static float OOshift23=1.0/(1<<23);
-
-float FastLog2(float i)
+float FastLog2(float val)
 {
-	float LogBodge=0.346607f;
-	float x;
-	float y;
-	x=*(int *)&i;
-	x*= OOshift23; //1/pow(2,23);
-	x=x-127;
-
-	y=x-floorf(x);
-	y=(y-y*y)*LogBodge;
-	return x+y;
+	union { float val; int32_t x; } u = { val, };
+    float log_2 = (float)(((u.x >> 23) & 255) - 128);              
+    u.x   &= ~(255 << 23);
+    u.x   += 127 << 23;
+    log_2 += ((-0.34484843f) * u.val + 2.02466578f) * u.val - 0.67487759f; 
+    return (log_2);
 }
+
 float FastPow2(float i)
 {
-	float PowBodge=0.33971f;
-	float x;
-	float y=i-floorf(i);
-	y=(y-y*y)*PowBodge;
-
-	x=i+127-y;
-	x*= shift23; //pow(2,23);
-	*(int*)&x=(int)x;
-	return x;
+	__m128 v = _mm_set_ss(i);
+	v = _mm_mul_ss(v, v);
+	return _mm_cvtss_f32(v);
 }
+
 float FastPow(float a, float b)
 {
-	if (a <= OOshift23)
-	{
-		return 0.0f;
-	}
-	return FastPow2(b*FastLog2(a));
+	return FastPow2(b * FastLog2(a));
 }
+
 float FastPow10( float i )
 {
 	return FastPow2( i * 3.321928f );
